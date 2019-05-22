@@ -1,3 +1,9 @@
+"""
+Calculates class specific and over-all evaluation scores on the model
+Scores: TP,FN,FP,precision,recall,f2score
+"""
+
+
 from __future__ import division
 from __future__ import print_function
 from __future__ import absolute_import
@@ -6,7 +12,6 @@ import pprint
 import sys
 import time
 import numpy as np
-from optparse import OptionParser
 import pickle
 import math
 import cv2
@@ -17,6 +22,7 @@ import matplotlib.patches as patches
 import tensorflow as tf
 import pandas as pd
 import os
+import six
 
 from sklearn.metrics import average_precision_score
 
@@ -35,10 +41,483 @@ from keras.engine import Layer, InputSpec
 from keras import initializers, regularizers
 import argparse
 import datetime
+from definitions import *
 
-def predict_classes(pathes,):
-    pass
+def test(pathes = None):
+    """Define Config"""
+    config_output_filename = os.path.join(output_path, 'model', 'model_vgg_config.pickle')
+    assert (os.path.exists(
+        config_output_filename)), "Config File {} missing, Check if training has been performed with given session name".format(
+        config_output_filename)
+    os.makedirs(test_store_path)
 
-def f2_score():
-    pass
+    with open(config_output_filename, 'rb') as f_in:
+        C = pickle.load(f_in)
+
+    # turn off any data augmentation at test time
+    C.use_horizontal_flips = False
+    C.use_vertical_flips = False
+    C.rot_90 = False
+
+    # Load the records
+    record_df = pd.read_csv(C.record_path)
+
+    r_epochs = len(record_df)
+
+    num_features = 512
+
+    input_shape_img = (None, None, 3)
+    input_shape_features = (None, None, num_features)
+
+    img_input = Input(shape=input_shape_img)
+    roi_input = Input(shape=(C.num_rois, 4))
+    feature_map_input = Input(shape=input_shape_features)
+
+    # define the base network (VGG here, can be Resnet50, Inception, etc)
+    shared_layers = nn_base(img_input, trainable=True)
+
+    # define the RPN, built on the base layers
+    num_anchors = len(C.anchor_box_scales) * len(C.anchor_box_ratios)
+    rpn_layers = rpn_layer(shared_layers, num_anchors)
+
+    classifier = classifier_layer(feature_map_input, roi_input, C.num_rois, nb_classes=len(C.class_mapping))
+
+    model_rpn = Model(img_input, rpn_layers)
+    model_classifier_only = Model([feature_map_input, roi_input], classifier)
+
+    model_classifier = Model([feature_map_input, roi_input], classifier)
+
+    print('Loading weights from {}'.format(C.model_path))
+    model_rpn.load_weights(C.model_path, by_name=True)
+    model_classifier.load_weights(C.model_path, by_name=True)
+
+    model_rpn.compile(optimizer='sgd', loss='mse')
+    model_classifier.compile(optimizer='sgd', loss='mse')
+
+    # Switch key value for class mapping
+    class_mapping = C.class_mapping
+    class_mapping = {v: k for k, v in class_mapping.items()}
+    print(class_mapping)
+    class_to_color = {class_mapping[v]: np.random.randint(0, 255, 3) for v in class_mapping}
+
+
+    """Visualize results"""
+    test_imgs, _, _ = get_data(anno_path_test, data_path)
+    bbox_threshold = 0.5
+
+    for i in range(args.num_test_imgs):
+        rnd = np.random.randint(len(test_imgs))
+        image_data = test_imgs[rnd]
+        img_path = image_data['filepath']
+        print(image_data['bboxes'])
+
+        if not img_path.lower().endswith(('.bmp', '.jpeg', '.jpg', '.png', '.tif', '.tiff')):
+            continue
+        print(img_path)
+        st = time.time()
+
+        img = cv2.imread(img_path)
+
+        X, ratio = format_img(img,
+                              C)  # X: normiertes Bild (kurze Seite 300 pixel), ratio = 300/Originallänge kurze Seite
+
+        X = np.transpose(X, (0, 2, 3, 1))
+
+        # get output layer Y1, Y2 from the RPN and the feature maps F
+        # Y1: y_rpn_cls
+        # Y2: y_rpn_regr
+        [Y1, Y2, F] = model_rpn.predict(X)
+
+        # Get bboxes by applying NMS
+        # R.shape = (300, 4)
+        R = rpn_to_roi(Y1, Y2, C, K.image_dim_ordering(), overlap_thresh=0.7)
+
+        # convert from (x1,y1,x2,y2) to (x,y,w,h)
+        R[:, 2] -= R[:, 0]
+        R[:, 3] -= R[:, 1]
+
+        # apply the spatial pyramid pooling to the proposed regions
+        bboxes = {}
+        probs = {}
+
+        for jk in range(R.shape[0] // C.num_rois + 1):
+            ROIs = np.expand_dims(R[C.num_rois * jk:C.num_rois * (jk + 1), :], axis=0)  # num_rois Boxen auswählen
+            if ROIs.shape[1] == 0:  # wennn ROIs leer, fertig
+                break
+
+            if jk == R.shape[0] // C.num_rois:  # wenn ROIs nicht ganz aufgefüllt, auffüllen
+                # pad R
+                curr_shape = ROIs.shape
+                target_shape = (curr_shape[0], C.num_rois, curr_shape[2])
+                ROIs_padded = np.zeros(target_shape).astype(ROIs.dtype)
+                ROIs_padded[:, :curr_shape[1], :] = ROIs
+                ROIs_padded[0, curr_shape[1]:, :] = ROIs[0, 0, :]
+                ROIs = ROIs_padded
+
+            [P_cls, P_regr] = model_classifier_only.predict([F, ROIs])
+
+            # Calculate bboxes coordinates on resized image
+            for ii in range(P_cls.shape[1]):
+                # Ignore 'bg' class
+                if np.max(P_cls[0, ii, :]) < bbox_threshold or np.argmax(P_cls[0, ii, :]) == (P_cls.shape[2] - 1):
+                    continue
+
+                cls_name = class_mapping[np.argmax(P_cls[0, ii, :])]
+
+                if cls_name not in bboxes:
+                    bboxes[cls_name] = []
+                    probs[cls_name] = []
+
+                (x, y, w, h) = ROIs[0, ii, :]
+
+                cls_num = np.argmax(P_cls[0, ii, :])
+                try:
+                    (tx, ty, tw, th) = P_regr[0, ii, 4 * cls_num:4 * (cls_num + 1)]
+                    tx /= C.classifier_regr_std[0]
+                    ty /= C.classifier_regr_std[1]
+                    tw /= C.classifier_regr_std[2]
+                    th /= C.classifier_regr_std[3]
+                    x, y, w, h = apply_regr(x, y, w, h, tx, ty, tw, th)
+                except:
+                    pass
+                bboxes[cls_name].append(
+                    [C.rpn_stride * x, C.rpn_stride * y, C.rpn_stride * (x + w), C.rpn_stride * (y + h)])
+                probs[cls_name].append(np.max(P_cls[0, ii, :]))
+
+        all_dets = []
+
+        fig = plt.figure(figsize=(16, 16))
+        ax = plt.subplot()
+        plt.grid()
+        plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+
+        ##Plot num region proposals (after non maximum supression)
+        # plot_region_proposals(R,ax,100,C)
+
+        for key in bboxes:
+            bbox = np.array(bboxes[key])
+
+            new_boxes, new_probs = non_max_suppression_fast(bbox, np.array(probs[key]), overlap_thresh=0.2)
+            for jk in range(new_boxes.shape[0]):
+                all_dets.append((key, 100 * new_probs[jk]))
+
+                (x1, y1, x2, y2) = new_boxes[jk, :]
+
+                # Calculate real coordinates on original image
+                (real_x1, real_y1, real_x2, real_y2) = get_real_coordinates(ratio, x1, y1, x2, y2)
+
+                # plot bounding box
+                p = patches.Rectangle((real_x1, real_y1), real_x2 - real_x1, real_y2 - real_y1, linewidth=4,
+                                      alpha=0.7, linestyle="dashed",
+                                      edgecolor="red", facecolor='none')
+                ax.add_patch(p)
+
+                textLabel = '{}: {}'.format(key, int(100 * new_probs[jk]))
+                plt.text(real_x1, real_y1, textLabel, fontsize=12, color="red", bbox=dict(facecolor='white', alpha=0.7))
+
+        # plot ground truth bounding boxes
+        for gt_box in image_data['bboxes']:
+            gt_x1, gt_x2 = gt_box['x1'], gt_box['x2']
+            gt_y1, gt_y2 = gt_box['y1'], gt_box['y2']
+            gt_x1, gt_y1, gt_x2, gt_y2 = int(gt_x1), int(gt_y1), int(gt_x2), int(gt_y2)
+
+            p = patches.Rectangle((gt_x1, gt_y1), gt_x2 - gt_x1, gt_y2 - gt_y1, linewidth=4,
+                                  alpha=1, linestyle="dashed",
+                                  edgecolor="green", facecolor='none')
+            ax.add_patch(p)
+
+            textLabel = gt_box['class']
+            plt.text(gt_x1, gt_y1, textLabel, fontsize=12, color="green", bbox=dict(facecolor='white', alpha=0.7))
+
+        print('Elapsed time = {}'.format(time.time() - st))
+        print(all_dets)
+        print('Ground Truth Boxes: Green, Predicted Boxes: Red')
+
+        # plt.show()
+        store_name = img_path.split('/')[-1].split('.')[0]  # e.g. C:/.../j8732.jpg ->j8732
+        fig.savefig(os.path.join(test_store_path, store_name), bbox_inches='tight')
+
+
+
+"""Predict Classes"""
+def predict_classes():
+
+    test_imgs, _, _ = get_data(anno_path_test, data_path)
+    bbox_threshold = 0.5
+
+    classes = pd.DataFrame(columns=['image','pred_classes', 'gt_classes'])
+
+    for idx, image_data in enumerate(test_imgs):
+        print('{}/{}'.format(idx, len(test_imgs)))
+        img_path = image_data['filepath']
+        img_name = img_path.split('/')[-1]
+        print(image_data['bboxes'])
+
+        if not img_path.lower().endswith(('.bmp', '.jpeg', '.jpg', '.png', '.tif', '.tiff')):
+            continue
+        print(img_path)
+        st = time.time()
+
+        '''Predict'''
+        img = cv2.imread(img_path)
+
+        X, ratio = format_img(img,C)  # X: normiertes Bild (kurze Seite 300 pixel), ratio = 300/Originallänge kurze Seite
+
+        X = np.transpose(X, (0, 2, 3, 1))
+
+        # get output layer Y1, Y2 from the RPN and the feature maps F
+        # Y1: y_rpn_cls
+        # Y2: y_rpn_regr
+        [Y1, Y2, F] = model_rpn.predict(X)
+
+        # Get bboxes by applying NMS
+        # R.shape = (300, 4)
+        R = rpn_to_roi(Y1, Y2, C, K.image_dim_ordering(), overlap_thresh=0.7)
+
+        # convert from (x1,y1,x2,y2) to (x,y,w,h)
+        R[:, 2] -= R[:, 0]
+        R[:, 3] -= R[:, 1]
+
+        # apply the spatial pyramid pooling to the proposed regions
+        bboxes = {}
+        probs = {}
+
+        for jk in range(R.shape[0] // C.num_rois + 1):
+            ROIs = np.expand_dims(R[C.num_rois * jk:C.num_rois * (jk + 1), :], axis=0)  # num_rois Boxen auswählen
+            if ROIs.shape[1] == 0:  # wennn ROIs leer, fertig
+                break
+
+            if jk == R.shape[0] // C.num_rois:  # wenn ROIs nicht ganz aufgefüllt, auffüllen
+                # pad R
+                curr_shape = ROIs.shape
+                target_shape = (curr_shape[0], C.num_rois, curr_shape[2])
+                ROIs_padded = np.zeros(target_shape).astype(ROIs.dtype)
+                ROIs_padded[:, :curr_shape[1], :] = ROIs
+                ROIs_padded[0, curr_shape[1]:, :] = ROIs[0, 0, :]
+                ROIs = ROIs_padded
+
+            [P_cls, P_regr] = model_classifier_only.predict([F, ROIs])
+
+            # Calculate bboxes coordinates on resized image
+            for ii in range(P_cls.shape[1]):
+                # Ignore 'bg' class
+                if np.max(P_cls[0, ii, :]) < bbox_threshold or np.argmax(P_cls[0, ii, :]) == (P_cls.shape[2] - 1):
+                    continue
+
+                cls_name = class_mapping[np.argmax(P_cls[0, ii, :])]
+
+                if cls_name not in bboxes:
+                    bboxes[cls_name] = []
+                    probs[cls_name] = []
+
+                (x, y, w, h) = ROIs[0, ii, :]
+
+                cls_num = np.argmax(P_cls[0, ii, :])
+                try:
+                    (tx, ty, tw, th) = P_regr[0, ii, 4 * cls_num:4 * (cls_num + 1)]
+                    tx /= C.classifier_regr_std[0]
+                    ty /= C.classifier_regr_std[1]
+                    tw /= C.classifier_regr_std[2]
+                    th /= C.classifier_regr_std[3]
+                    x, y, w, h = apply_regr(x, y, w, h, tx, ty, tw, th)
+                except:
+                    pass
+                bboxes[cls_name].append(
+                    [C.rpn_stride * x, C.rpn_stride * y, C.rpn_stride * (x + w), C.rpn_stride * (y + h)])
+                probs[cls_name].append(np.max(P_cls[0, ii, :]))
+
+
+        pred_class_list = []  #contains all predicted class instances
+        gt_class_list = []    #contains the ground truth class instances
+        for key in bboxes:
+            bbox = np.array(bboxes[key])
+
+            new_boxes, new_probs = non_max_suppression_fast(bbox, np.array(probs[key]), overlap_thresh=0.2)
+
+            for jk in range(new_boxes.shape[0]):
+                pred_class_list.append(key)
+
+        for gt_box in image_data['bboxes']:
+
+            gt_class_list.append( gt_box['class'] )
+
+        new_row = {'image': img_name, 'pred_classes': pred_class_list, 'gt_classes':gt_class_list}
+        classes = classes.append(new_row, ignore_index=True)
+
+    return classes
+
+
+
+def get_scores():
+    TP = {}
+    FN = {}
+    FP = {}
+    precision = {}
+    recall ={}
+    f2_score = {}
+    #initialize classwise counters, key is a classname like 'Coat'
+    for key in C.class_mapping:
+        TP[key] = 0
+        FN[key] = 0
+        FP[key] = 0
+
+    for _,img in classes.iterrows():
+        predictions = img['pred_classes']
+        ground_truth = img['gt_classes']
+
+        #if prediction is found in ground truth, it's a true positive, otherwise a false positive
+        for pred in predictions:
+            if pred in ground_truth:
+                TP[pred]+=1
+                ground_truth.remove(pred)
+            else:
+                FP[pred]+=1
+
+        for gt in ground_truth:
+            FN[gt] += 1     #any remaining instance in ground truth was not found i.e. is a false negative
+
+
+    for key in C.class_mapping:
+        precision[key] = round(   TP[key] / (TP[key]+FP[key]+0.01)    ,2) ##a little hack to prevent division by zero errors
+        recall[key]    = round(   TP[key] / (TP[key] + FN[key]+0.01)  ,2)
+        f2_score[key]  = round(   5 * (precision[key] * recall[key]) / (4 * precision[key] + recall[key] + 0.01)  ,2)
+
+        TP['all'] = sum(TP.values())
+        FN['all'] = sum(FN.values())
+        FP['all'] = sum(FP.values())
+        precision['all'] = round(   TP['all'] / (TP['all'] + FP['all'] + 0.01) ,2)
+        recall['all']    = round(   TP['all'] / (TP['all'] + FN['all']+0.01)   ,2)
+        f2_score['all']  = round(  5 * (precision['all'] * recall['all']) / (4 * precision['all'] + recall['all'] + 0.01) ,2)
+
+
+    print('Precision: {}, Recall: {}'.format(precision['all'], recall['all']))
+    print('F2-Score: {}'.format(f2_score['all']))
+
+    return TP,FP,FN,precision,recall,f2_score
+
+'''renders a pandas dataframe'''
+def render_pandas_dataframe(data, col_width=3.0, row_height=0.625, font_size=14,
+                     header_color='#40466e', row_colors=['#f1f1f2', 'w'], edge_color='w',
+                     bbox=[0, 0, 1, 1], header_columns=0,
+                     ax=None, **kwargs):
+    if ax is None:
+        size = (np.array(data.shape[::-1]) + np.array([0, 1])) * np.array([col_width, row_height])
+        fig, ax = plt.subplots(figsize=size)
+        ax.axis('off')
+
+    mpl_table = ax.table(cellText=data.values, bbox=bbox, colLabels=data.columns, **kwargs)
+
+    mpl_table.auto_set_font_size(False)
+    mpl_table.set_fontsize(font_size)
+
+    for k, cell in  six.iteritems(mpl_table._cells):
+        cell.set_edgecolor(edge_color)
+        if k[0] == 0 or k[1] < header_columns:
+            cell.set_text_props(weight='bold', color='w')
+            cell.set_facecolor(header_color)
+        else:
+            cell.set_facecolor(row_colors[k[0]%len(row_colors) ])
+    return ax
+
+if __name__ == '__main__':
+    """General settings"""
+    parser = argparse.ArgumentParser(description='The following parameters can be assigned:')
+    parser.add_argument('--session_name', required=True, type=str)
+    parser.add_argument('--base_path', required=True, type=str)
+    parser.add_argument('--data_path', required=True, type=str)
+    parser.add_argument('--anno_path_test', required=True, type=str)
+    args = parser.parse_args()
+
+    base_path = args.base_path  # path config and models are stored in
+    data_path = args.data_path  # path test and train directory are stored in
+    anno_path_test = args.anno_path_test  # path the anno file is stored in
+    output_path = os.path.join(base_path, 'sessions', args.session_name)
+    test_store_path = os.path.join(output_path, "Evaluation Scores on {}".format(
+        datetime.datetime.now().strftime("%A, %d %b %Y,%H %M")))  # path to save output figures in
+    classes_path = os.path.join(test_store_path, 'predicted_classes.csv')
+    f2_score_path = os.path.join(test_store_path, 'f2_score.csv')
+
+    print('This is an Evaluation Session of ->{}<-.'.format(args.session_name))
+    print('Base Path: {}'.format(base_path))
+    print('Annotation File for Testing: {}'.format(anno_path_test))
+    print('Image Data: {}'.format(data_path))
+    print('Output: {}'.format(test_store_path))
+
+
+    '''Prepare Model'''
+    """Define Config"""
+    config_output_filename = os.path.join(output_path, 'model', 'model_vgg_config.pickle')
+    assert (os.path.exists(
+        config_output_filename)), "Config File {} missing, Check if training has been performed with given session name".format(
+        config_output_filename)
+    os.makedirs(test_store_path)
+
+    with open(config_output_filename, 'rb') as f_in:
+        C = pickle.load(f_in)
+
+    # turn off any data augmentation at test time
+    C.use_horizontal_flips = False
+    C.use_vertical_flips = False
+    C.rot_90 = False
+
+    # Load the records
+    record_df = pd.read_csv(C.record_path)
+
+    r_epochs = len(record_df)
+
+    num_features = 512
+
+    input_shape_img = (None, None, 3)
+    input_shape_features = (None, None, num_features)
+
+    img_input = Input(shape=input_shape_img)
+    roi_input = Input(shape=(C.num_rois, 4))
+    feature_map_input = Input(shape=input_shape_features)
+
+    # define the base network (VGG here, can be Resnet50, Inception, etc)
+    shared_layers = nn_base(img_input, trainable=True)
+
+    # define the RPN, built on the base layers
+    num_anchors = len(C.anchor_box_scales) * len(C.anchor_box_ratios)
+    rpn_layers = rpn_layer(shared_layers, num_anchors)
+
+    classifier = classifier_layer(feature_map_input, roi_input, C.num_rois, nb_classes=len(C.class_mapping))
+
+    model_rpn = Model(img_input, rpn_layers)
+    model_classifier_only = Model([feature_map_input, roi_input], classifier)
+
+    model_classifier = Model([feature_map_input, roi_input], classifier)
+
+    print('Loading weights from {}'.format(C.model_path))
+    model_rpn.load_weights(C.model_path, by_name=True)
+    model_classifier.load_weights(C.model_path, by_name=True)
+
+    model_rpn.compile(optimizer='sgd', loss='mse')
+    model_classifier.compile(optimizer='sgd', loss='mse')
+
+    # Switch key value for class mapping
+    class_mapping = C.class_mapping
+    class_mapping = {v: k for k, v in class_mapping.items()}
+    print(class_mapping)
+    class_to_color = {class_mapping[v]: np.random.randint(0, 255, 3) for v in class_mapping}
+
+    '''Evaluate'''
+    classes = predict_classes()
+    TP,FP,FN,precision,recall,f2_score = get_scores()
+    classes.to_csv(classes_path, index=0)
+
+    scores = pd.DataFrame(columns=['Class', 'TP', 'FP', 'FN', 'F2-Score', 'Precision', 'Recall'])
+
+    for key in C.class_mapping:
+        new_row = {'Class': key, 'TP': TP[key], 'FP': FP[key],'FN': FN[key],'F2-Score': f2_score[key],'Precision': precision[key], 'Recall':recall[key]}
+        scores = scores.append(new_row, ignore_index=True)
+
+
+    #scores = pd.DataFrame(columns=['F2-Score'])
+    #scores.append({'F2-Score':f2_score},ignore_index=True)
+    scores.to_csv(f2_score_path)
+    ax = render_pandas_dataframe(scores, header_columns=0, col_width=3.0)
+    plt.suptitle('Evaluation Scores of {}'.format(args.session_name), fontsize = 30)
+    plt.savefig(os.path.join(test_store_path, 'scores.png'))
+
 

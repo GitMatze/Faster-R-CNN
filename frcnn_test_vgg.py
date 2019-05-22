@@ -59,7 +59,7 @@ base_path = args.base_path #path config and models are stored in
 data_path = args.data_path #path test and train directory are stored in
 anno_path_test = args.anno_path_test #path the anno file is stored in
 output_path = os.path.join(base_path, 'sessions', args.session_name)
-test_store_path = os.path.join(output_path, "Test at {}".format(datetime.datetime.now().strftime("%A, %d %b %Y,%H %M %S"))) #path to save output figures in
+test_store_path = os.path.join(output_path, "Test on {}".format(datetime.datetime.now().strftime("%A, %d %b %Y,%H %M %S"))) #path to save output figures in
 
 print('This is a Testing Session of ->{}<-.'.format(args.session_name))
 print('Base Path: {}'.format(base_path))
