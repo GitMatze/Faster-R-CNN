@@ -1470,6 +1470,7 @@ else:
 	r_loss_class_cls = record_df['loss_class_cls']
 	r_loss_class_regr = record_df['loss_class_regr']
 	r_curr_loss = record_df['curr_loss']
+	r_curr_loss_val = record_df['curr_loss_val']
 	r_elapsed_time = record_df['elapsed_time']
 	r_mAP = record_df['mAP']
 
@@ -1502,7 +1503,7 @@ rpn_accuracy_for_epoch = []
 if len(record_df)==0:
 	best_loss = np.Inf
 else:
-	best_loss = np.min(r_curr_loss)
+	best_loss = np.min(r_curr_loss_val)
 
 print(len(record_df))
 
@@ -1774,10 +1775,11 @@ for epoch_num in range(num_epochs):
 				iter_num = 0
 				start_time = time.time()
 
-				if curr_loss < best_loss:
+				#if curr_loss < best_loss:           #note that initialization was also changed
+				if val_losses['curr_loss'] < best_loss:
 					if C.verbose:
-						print('Total loss decreased from {} to {}, saving weights'.format(best_loss,curr_loss))
-					best_loss = curr_loss
+						print('Total loss decreased from {} to {}, saving weights'.format(best_loss,val_losses['curr_loss']))
+					best_loss = val_losses['curr_loss']
 					model_all.save_weights(C.model_path)
 
 				new_row = {'mean_overlapping_bboxes':round(mean_overlapping_bboxes, 3),

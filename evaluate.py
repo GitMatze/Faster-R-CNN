@@ -329,6 +329,7 @@ def predict_classes():
 
         pred_class_list = []  #contains all predicted class instances
         gt_class_list = []    #contains the ground truth class instances
+
         for key in bboxes:
             bbox = np.array(bboxes[key])
 
@@ -361,9 +362,10 @@ def get_scores():
         FN[key] = 0
         FP[key] = 0
 
+    #ground_truth_copied = ground_truth.copy()
     for _,img in classes.iterrows():
         predictions = img['pred_classes']
-        ground_truth = img['gt_classes']
+        ground_truth = img['gt_classes'].copy() #removal of items needed, hence the copy
 
         #if prediction is found in ground truth, it's a true positive, otherwise a false positive
         for pred in predictions:
@@ -382,16 +384,16 @@ def get_scores():
         recall[key]    = round(   TP[key] / (TP[key] + FN[key]+0.01)  ,2)
         f2_score[key]  = round(   5 * (precision[key] * recall[key]) / (4 * precision[key] + recall[key] + 0.01)  ,2)
 
-        TP['all'] = sum(TP.values())
-        FN['all'] = sum(FN.values())
-        FP['all'] = sum(FP.values())
-        precision['all'] = round(   TP['all'] / (TP['all'] + FP['all'] + 0.01) ,2)
-        recall['all']    = round(   TP['all'] / (TP['all'] + FN['all']+0.01)   ,2)
-        f2_score['all']  = round(  5 * (precision['all'] * recall['all']) / (4 * precision['all'] + recall['all'] + 0.01) ,2)
+        TP['ALL'] = sum(TP.values())
+        FN['ALL'] = sum(FN.values())
+        FP['ALL'] = sum(FP.values())
+        precision['ALL'] = round(   TP['ALL'] / (TP['ALL'] + FP['ALL'] + 0.01) ,2)
+        recall['ALL']    = round(   TP['ALL'] / (TP['ALL'] + FN['ALL']+0.01)   ,2)
+        f2_score['ALL']  = round(  5 * (precision['ALL'] * recall['ALL']) / (4 * precision['ALL'] + recall['ALL'] + 0.01) ,2)
 
 
-    print('Precision: {}, Recall: {}'.format(precision['all'], recall['all']))
-    print('F2-Score: {}'.format(f2_score['all']))
+    print('Precision: {}, Recall: {}'.format(precision['ALL'], recall['ALL']))
+    print('F2-Score: {}'.format(f2_score['ALL']))
 
     return TP,FP,FN,precision,recall,f2_score
 
@@ -435,7 +437,7 @@ if __name__ == '__main__':
     test_store_path = os.path.join(output_path, "Evaluation Scores on {}".format(
         datetime.datetime.now().strftime("%A, %d %b %Y,%H %M")))  # path to save output figures in
     classes_path = os.path.join(test_store_path, 'predicted_classes.csv')
-    f2_score_path = os.path.join(test_store_path, 'f2_score.csv')
+    f2_score_path = os.path.join(test_store_path, 'scores.csv')
 
     print('This is an Evaluation Session of ->{}<-.'.format(args.session_name))
     print('Base Path: {}'.format(base_path))
@@ -504,20 +506,19 @@ if __name__ == '__main__':
     '''Evaluate'''
     classes = predict_classes()
     TP,FP,FN,precision,recall,f2_score = get_scores()
-    classes.to_csv(classes_path, index=0)
 
     scores = pd.DataFrame(columns=['Class', 'TP', 'FP', 'FN', 'F2-Score', 'Precision', 'Recall'])
 
-    for key in C.class_mapping:
+    for key in precision:
         new_row = {'Class': key, 'TP': TP[key], 'FP': FP[key],'FN': FN[key],'F2-Score': f2_score[key],'Precision': precision[key], 'Recall':recall[key]}
         scores = scores.append(new_row, ignore_index=True)
 
 
-    #scores = pd.DataFrame(columns=['F2-Score'])
-    #scores.append({'F2-Score':f2_score},ignore_index=True)
-    scores.to_csv(f2_score_path)
     ax = render_pandas_dataframe(scores, header_columns=0, col_width=3.0)
     plt.suptitle('Evaluation Scores of {}'.format(args.session_name), fontsize = 30)
-    plt.savefig(os.path.join(test_store_path, 'scores.png'))
+
+    plt.savefig(os.path.join(test_store_path, 'scores.pdf'))
+    scores.to_csv(f2_score_path)
+    classes.to_csv(classes_path, index=0)
 
 

@@ -1,3 +1,9 @@
+'''
+This file contain all the definitions from test_frcnn, since they are needed for task which involves a model prediction
+'''
+
+
+
 from __future__ import division
 from __future__ import print_function
 from __future__ import absolute_import
@@ -32,16 +38,6 @@ from keras.models import Model
 from keras.utils import generic_utils
 from keras.engine import Layer, InputSpec
 from keras import initializers, regularizers
-
-
-
-
-
-
-
-
-
-
 
 
 class Config:
