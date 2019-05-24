@@ -1,5 +1,5 @@
 '''
-This file contain all the definitions from test_frcnn, since they are needed for task which involves a model prediction
+This file contains all the definitions from test_frcnn, since they are needed for any task that involves a model prediction
 '''
 
 

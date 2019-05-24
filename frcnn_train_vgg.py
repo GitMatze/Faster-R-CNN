@@ -72,7 +72,7 @@ print('Annotation File for Cross Validation: {}'.format(anno_path_val))
 print('Image Data: {}'.format(data_path))
 print('Pretrained Weight Path: {}'.format(args.pretrained_weight_path))
 print('Number of Epochs: {}'.format(args.epochs))
-print('Number of Images to Compute Cross Validation (val_length): {}'.format(args.val_length))
+print('Number of Images to Compute Cross Validation on (val_length): {}'.format(args.val_length))
 
 
 
@@ -1778,7 +1778,7 @@ for epoch_num in range(num_epochs):
 				#if curr_loss < best_loss:           #note that initialization was also changed
 				if val_losses['curr_loss'] < best_loss:
 					if C.verbose:
-						print('Total loss decreased from {} to {}, saving weights'.format(best_loss,val_losses['curr_loss']))
+						print('Total validation loss decreased from {} to {}, saving weights'.format(best_loss,val_losses['curr_loss']))
 					best_loss = val_losses['curr_loss']
 					model_all.save_weights(C.model_path)
 

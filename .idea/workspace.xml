@@ -2,9 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="3b7aa311-0686-4840-8c74-c1fa7ae37904" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/definitions.py" beforeDir="false" afterPath="$PROJECT_DIR$/definitions.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/evaluate.py" beforeDir="false" afterPath="$PROJECT_DIR$/evaluate.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frcnn_train_vgg.py" beforeDir="false" afterPath="$PROJECT_DIR$/frcnn_train_vgg.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -15,11 +13,11 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file pinned="false" current-in-tab="true">
+      <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/frcnn_train_vgg.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="173">
-              <caret line="1500" column="27" lean-forward="true" selection-start-line="1500" selection-start-column="27" selection-end-line="1500" selection-end-column="27" />
+            <state relative-caret-position="1">
+              <caret line="1780" column="48" selection-start-line="1780" selection-start-column="48" selection-end-line="1780" selection-end-column="48" />
               <folding>
                 <element signature="e#246#277#0" expanded="true" />
               </folding>
@@ -30,8 +28,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/frcnn_test_vgg.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="17595">
-              <caret line="1071" column="18" selection-start-line="1071" selection-start-column="11" selection-end-line="1071" selection-end-column="18" />
+            <state relative-caret-position="442">
+              <caret line="1456" column="18" selection-start-line="1456" selection-start-column="18" selection-end-line="1456" selection-end-column="18" />
               <folding>
                 <element signature="e#212#243#0" expanded="true" />
               </folding>
@@ -39,11 +37,11 @@
           </provider>
         </entry>
       </file>
-      <file pinned="false" current-in-tab="false">
+      <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/evaluate.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="325">
-              <caret line="369" column="64" selection-start-line="369" selection-start-column="64" selection-end-line="369" selection-end-column="64" />
+            <state relative-caret-position="1054">
+              <caret line="342" column="51" lean-forward="true" selection-start-line="342" selection-start-column="51" selection-end-line="342" selection-end-column="51" />
             </state>
           </provider>
         </entry>
@@ -51,8 +49,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/definitions.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-882">
-              <caret line="102" column="12" selection-start-line="102" selection-start-column="4" selection-end-line="102" selection-end-column="12" />
+            <state relative-caret-position="-1189">
+              <caret line="940" column="4" selection-start-line="940" selection-start-column="4" selection-end-line="940" selection-end-column="4" />
               <folding>
                 <element signature="e#131#162#0" expanded="true" />
               </folding>
@@ -106,18 +104,17 @@
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
       <list>
-        <option value="$PROJECT_DIR$/frcnn_test_vgg.py" />
         <option value="$PROJECT_DIR$/f2_score.py" />
-        <option value="$PROJECT_DIR$/definitions.py" />
         <option value="$PROJECT_DIR$/evaluate.py" />
+        <option value="$PROJECT_DIR$/definitions.py" />
+        <option value="$PROJECT_DIR$/frcnn_test_vgg.py" />
         <option value="$PROJECT_DIR$/frcnn_train_vgg.py" />
       </list>
     </option>
   </component>
-  <component name="ProjectFrameBounds" extendedState="1">
-    <option name="x" value="-22" />
-    <option name="y" value="41" />
-    <option name="width" value="1318" />
+  <component name="ProjectFrameBounds" extendedState="6">
+    <option name="x" value="921" />
+    <option name="width" value="943" />
     <option name="height" value="1087" />
   </component>
   <component name="ProjectView">
@@ -156,7 +153,7 @@
       </list>
     </option>
   </component>
-  <component name="RunManager" selected="Python.frcnn_train_vgg">
+  <component name="RunManager" selected="Python.frcnn_test_vgg">
     <configuration default="true" type="PythonConfigurationType" factoryName="Python">
       <module name="Faster-R-CNN" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -270,10 +267,10 @@
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.frcnn_test_vgg" />
         <item itemvalue="Python.frcnn_train_vgg" />
         <item itemvalue="Python.f2_score" />
         <item itemvalue="Python.definitions" />
-        <item itemvalue="Python.frcnn_test_vgg" />
       </list>
     </recent_temporary>
   </component>
@@ -291,15 +288,15 @@
     <servers />
   </component>
   <component name="ToolWindowManager">
-    <frame x="-22" y="41" width="1318" height="1087" extended-state="1" />
+    <frame x="-8" y="-8" width="1873" height="1096" extended-state="6" />
     <editor active="true" />
     <layout>
-      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.4976452" visible="true" weight="0.3234375" />
-      <window_info id="Structure" order="1" sideWeight="0.5023548" side_tool="true" visible="true" weight="0.3234375" />
+      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.4976452" weight="0.45745856" />
+      <window_info id="Structure" order="1" sideWeight="0.5023548" side_tool="true" weight="0.45745856" />
       <window_info id="Favorites" order="2" side_tool="true" />
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" weight="0.32917964" />
-      <window_info active="true" anchor="bottom" id="Run" order="2" visible="true" weight="0.3322851" />
+      <window_info active="true" anchor="bottom" id="Run" order="2" visible="true" weight="0.33125648" />
       <window_info anchor="bottom" id="Debug" order="3" weight="0.3997923" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
@@ -325,16 +322,6 @@
   </component>
   <component name="editorHistoryManager">
     <entry file="file://$PROJECT_DIR$/f2_score.py" />
-    <entry file="file://$PROJECT_DIR$/frcnn_test_vgg.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="17595">
-          <caret line="1071" column="18" selection-start-line="1071" selection-start-column="11" selection-end-line="1071" selection-end-column="18" />
-          <folding>
-            <element signature="e#212#243#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/../../../../../../Python/environments/FastRCNN/Lib/site-packages/pandas/core/generic.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="30090">
@@ -349,30 +336,40 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/frcnn_test_vgg.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="442">
+          <caret line="1456" column="18" selection-start-line="1456" selection-start-column="18" selection-end-line="1456" selection-end-column="18" />
+          <folding>
+            <element signature="e#212#243#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/definitions.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-882">
-          <caret line="102" column="12" selection-start-line="102" selection-start-column="4" selection-end-line="102" selection-end-column="12" />
+        <state relative-caret-position="-1189">
+          <caret line="940" column="4" selection-start-line="940" selection-start-column="4" selection-end-line="940" selection-end-column="4" />
           <folding>
             <element signature="e#131#162#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/evaluate.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="325">
-          <caret line="369" column="64" selection-start-line="369" selection-start-column="64" selection-end-line="369" selection-end-column="64" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/frcnn_train_vgg.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="173">
-          <caret line="1500" column="27" lean-forward="true" selection-start-line="1500" selection-start-column="27" selection-end-line="1500" selection-end-column="27" />
+        <state relative-caret-position="1">
+          <caret line="1780" column="48" selection-start-line="1780" selection-start-column="48" selection-end-line="1780" selection-end-column="48" />
           <folding>
             <element signature="e#246#277#0" expanded="true" />
           </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/evaluate.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1054">
+          <caret line="342" column="51" lean-forward="true" selection-start-line="342" selection-start-column="51" selection-end-line="342" selection-end-column="51" />
         </state>
       </provider>
     </entry>
