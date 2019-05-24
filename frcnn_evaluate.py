@@ -240,10 +240,16 @@ def test(pathes = None):
 
 
 """Predict Classes"""
-def predict_classes():
+def predict_classes(bbox_threshold=0.5):
+
+    if type(bbox_threshold)==int:  #wenn int, make dictionary with same threshold for every class
+        tresh = bbox_threshold
+        bbox_threshold = {}
+        for key in C.class_mapping:
+            bbox_threshold[key] = tresh
 
     test_imgs, _, _ = get_data(anno_path_test, data_path)
-    bbox_threshold = 0.5
+
 
     classes = pd.DataFrame(columns=['image','pred_classes', 'gt_classes'])
 
@@ -300,11 +306,12 @@ def predict_classes():
 
             # Calculate bboxes coordinates on resized image
             for ii in range(P_cls.shape[1]):
-                # Ignore 'bg' class
-                if np.max(P_cls[0, ii, :]) < bbox_threshold or np.argmax(P_cls[0, ii, :]) == (P_cls.shape[2] - 1):
-                    continue
 
                 cls_name = class_mapping[np.argmax(P_cls[0, ii, :])]
+
+                # Ignore 'bg' class
+                if np.max(P_cls[0, ii, :]) < bbox_threshold[cls_name] or np.argmax(P_cls[0, ii, :]) == (P_cls.shape[2] - 1):
+                    continue
 
                 if cls_name not in bboxes:
                     bboxes[cls_name] = []
@@ -420,6 +427,9 @@ def render_pandas_dataframe(data, col_width=3.0, row_height=0.625, font_size=14,
         else:
             cell.set_facecolor(row_colors[k[0]%len(row_colors) ])
     return ax
+
+
+'''---------------------- main----------------------------'''
 
 if __name__ == '__main__':
     """General settings"""
