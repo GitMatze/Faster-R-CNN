@@ -240,28 +240,27 @@ def test(pathes = None):
 
 
 """Predict Classes"""
-def predict_classes(bbox_threshold=0.5):
 
-    if type(bbox_threshold)==int:  #wenn int, make dictionary with same threshold for every class
+def predict_classes(C,model_rpn, model_classifier_only, class_mapping,test_imgs,bbox_threshold=0.5):
+
+    # if single number, make dictionary with same threshold for every class
+    if type(bbox_threshold)==float or type(bbox_threshold)== int:
         tresh = bbox_threshold
         bbox_threshold = {}
         for key in C.class_mapping:
             bbox_threshold[key] = tresh
 
-    test_imgs, _, _ = get_data(anno_path_test, data_path)
-
-
     classes = pd.DataFrame(columns=['image','pred_classes', 'gt_classes'])
 
     for idx, image_data in enumerate(test_imgs):
-        print('{}/{}'.format(idx, len(test_imgs)))
+        #print('Get classes of {}/{}'.format(idx, len(test_imgs)))
         img_path = image_data['filepath']
         img_name = img_path.split('/')[-1]
-        print(image_data['bboxes'])
+        #print(image_data['bboxes'])
 
         if not img_path.lower().endswith(('.bmp', '.jpeg', '.jpg', '.png', '.tif', '.tiff')):
             continue
-        print(img_path)
+        #print(img_path)
         st = time.time()
 
         '''Predict'''
@@ -356,7 +355,7 @@ def predict_classes(bbox_threshold=0.5):
 
 
 
-def get_scores():
+def get_scores(C,classes):
     TP = {}
     FN = {}
     FP = {}
@@ -391,12 +390,12 @@ def get_scores():
         recall[key]    = round(   TP[key] / (TP[key] + FN[key]+0.01)  ,2)
         f2_score[key]  = round(   5 * (precision[key] * recall[key]) / (4 * precision[key] + recall[key] + 0.01)  ,2)
 
-        TP['ALL'] = sum(TP.values())
-        FN['ALL'] = sum(FN.values())
-        FP['ALL'] = sum(FP.values())
-        precision['ALL'] = round(   TP['ALL'] / (TP['ALL'] + FP['ALL'] + 0.01) ,2)
-        recall['ALL']    = round(   TP['ALL'] / (TP['ALL'] + FN['ALL']+0.01)   ,2)
-        f2_score['ALL']  = round(  5 * (precision['ALL'] * recall['ALL']) / (4 * precision['ALL'] + recall['ALL'] + 0.01) ,2)
+    TP['ALL'] = sum(TP.values())
+    FN['ALL'] = sum(FN.values())
+    FP['ALL'] = sum(FP.values())
+    precision['ALL'] = round(   TP['ALL'] / (TP['ALL'] + FP['ALL'] + 0.01) ,2)
+    recall['ALL']    = round(   TP['ALL'] / (TP['ALL'] + FN['ALL']+0.01)   ,2)
+    f2_score['ALL']  = round(  5 * (precision['ALL'] * recall['ALL']) / (4 * precision['ALL'] + recall['ALL'] + 0.01) ,2)
 
 
     print('Precision: {}, Recall: {}'.format(precision['ALL'], recall['ALL']))
@@ -429,6 +428,7 @@ def render_pandas_dataframe(data, col_width=3.0, row_height=0.625, font_size=14,
     return ax
 
 
+
 '''---------------------- main----------------------------'''
 
 if __name__ == '__main__':
@@ -438,16 +438,20 @@ if __name__ == '__main__':
     parser.add_argument('--base_path', required=True, type=str)
     parser.add_argument('--data_path', required=True, type=str)
     parser.add_argument('--anno_path_test', required=True, type=str)
+    parser.add_argument('--threshold_path', required=False,default=None, type=str)
+    parser.add_argument('--threshold', required=False, default=0.5, type=int)
     args = parser.parse_args()
 
     base_path = args.base_path  # path config and models are stored in
     data_path = args.data_path  # path test and train directory are stored in
     anno_path_test = args.anno_path_test  # path the anno file is stored in
+    threshold_path = args.threshold_path  # path to the thresholds (minimum probability for a class to be output)
     output_path = os.path.join(base_path, 'sessions', args.session_name)
     test_store_path = os.path.join(output_path, "Evaluation Scores on {}".format(
         datetime.datetime.now().strftime("%A, %d %b %Y,%H %M")))  # path to save output figures in
     classes_path = os.path.join(test_store_path, 'predicted_classes.csv')
     f2_score_path = os.path.join(test_store_path, 'scores.csv')
+
 
     print('This is an Evaluation Session of ->{}<-.'.format(args.session_name))
     print('Base Path: {}'.format(base_path))
@@ -471,6 +475,19 @@ if __name__ == '__main__':
     C.use_horizontal_flips = False
     C.use_vertical_flips = False
     C.rot_90 = False
+
+    #Load thresholds
+    if threshold_path is not None:
+        threshold_df = pd.read_csv(threshold_path)
+        print(threshold_df)
+        threshold=threshold_df.to_dict('index')[0]
+
+        print('Using Thresholds of file {}'.format(threshold_path))
+        print('Thresholds{}'.format(threshold))
+    else:
+        threshold =  args.threshold
+        print('No threshold path given, thus using scalar value: {}'.format(args.threshold))
+
 
     # Load the records
     record_df = pd.read_csv(C.record_path)
@@ -514,8 +531,9 @@ if __name__ == '__main__':
     class_to_color = {class_mapping[v]: np.random.randint(0, 255, 3) for v in class_mapping}
 
     '''Evaluate'''
-    classes = predict_classes()
-    TP,FP,FN,precision,recall,f2_score = get_scores()
+    test_imgs, _, _ = get_data(anno_path_test, data_path)
+    classes = predict_classes(C,model_rpn, model_classifier_only,class_mapping, test_imgs, threshold)
+    TP,FP,FN,precision,recall,f2_score = get_scores(C,classes)
 
     scores = pd.DataFrame(columns=['Class', 'TP', 'FP', 'FN', 'F2-Score', 'Precision', 'Recall'])
 
