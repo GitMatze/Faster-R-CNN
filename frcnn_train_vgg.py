@@ -1503,7 +1503,7 @@ rpn_accuracy_for_epoch = []
 if len(record_df)==0:
 	best_loss = np.Inf
 else:
-	best_loss = np.min(r_curr_loss_val)
+	best_loss = np.min(r_curr_loss) #ToDO: r_curr_loss_val for early stopping
 
 print(len(record_df))
 
@@ -1775,11 +1775,11 @@ for epoch_num in range(num_epochs):
 				iter_num = 0
 				start_time = time.time()
 
-				#if curr_loss < best_loss:           #note that initialization was also changed
-				if val_losses['curr_loss'] < best_loss:
+				# if val_losses['curr_loss'] < best_loss:  #note that initialization was also changed
+				if curr_loss < best_loss:
 					if C.verbose:
-						print('Total validation loss decreased from {} to {}, saving weights'.format(best_loss,val_losses['curr_loss']))
-					best_loss = val_losses['curr_loss']
+						print('Total total loss decreased from {} to {}, saving weights'.format(best_loss,curr_loss))
+					best_loss = curr_loss
 					model_all.save_weights(C.model_path)
 
 				new_row = {'mean_overlapping_bboxes':round(mean_overlapping_bboxes, 3),

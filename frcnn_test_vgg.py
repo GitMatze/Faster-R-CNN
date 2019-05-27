@@ -52,7 +52,9 @@ parser.add_argument('--session_name', required=True, type=str)
 parser.add_argument('--base_path', required=True, type=str)
 parser.add_argument('--data_path', required=True, type=str)
 parser.add_argument('--anno_path_test', required=True, type=str)
+parser.add_argument('--threshold_path', required=False, default=None, type=str)
 parser.add_argument('--num_test_imgs', required=False, default=10, type=int)
+parser.add_argument('--bbox_threshold', required=False, default=0.5, type=int)
 args = parser.parse_args()
 
 base_path = args.base_path #path config and models are stored in
@@ -1435,10 +1437,6 @@ def format_img_map(img, C):
 
 print(class_mapping)
 
-# This might takes a while to parser the data
-test_imgs, _, _ = get_data(anno_path_test)
-
-"""####Visualize results"""
 
 #plot R (i.e. result of rpn after non maximum supression)
 def plot_region_proposals(R,ax,num,C):
@@ -1454,8 +1452,25 @@ def plot_region_proposals(R,ax,num,C):
 									edgecolor="blue", facecolor='none')
 		ax.add_patch(p)
 
-bbox_threshold=0.5
+# This might takes a while to parser the data
+test_imgs, _, _ = get_data(anno_path_test)
 
+#Load thresholds
+if args.threshold_path is not None:
+	threshold_df = pd.read_csv(args.threshold_path)
+	#print(threshold_df)
+	bbox_threshold=threshold_df.to_dict('index')[0]
+	print('Using Thresholds of file {}'.format(args.threshold_path))
+	print('Thresholds{}'.format(bbox_threshold))
+else:
+	bbox_threshold = {}
+	for key in C.class_mapping:
+		bbox_threshold[key] = args.bbox_threshold
+	print('No threshold path given, thus using scalar value: {}'.format(args.bbox_threshold))
+
+
+
+"""####Visualize results"""
 for i in range(args.num_test_imgs):
 	rnd = np.random.randint(len(test_imgs))
 	image_data = test_imgs[rnd]
@@ -1512,11 +1527,11 @@ for i in range(args.num_test_imgs):
 
 		# Calculate bboxes coordinates on resized image
 		for ii in range(P_cls.shape[1]):
+			cls_name = class_mapping[np.argmax(P_cls[0, ii, :])]
 			# Ignore 'bg' class
-			if np.max(P_cls[0, ii, :]) < bbox_threshold or np.argmax(P_cls[0, ii, :]) == (P_cls.shape[2] - 1):
+			if np.max(P_cls[0, ii, :]) < bbox_threshold[cls_name] or np.argmax(P_cls[0, ii, :]) == (P_cls.shape[2] - 1):
 				continue
 
-			cls_name = class_mapping[np.argmax(P_cls[0, ii, :])]
 
 			if cls_name not in bboxes:
 				bboxes[cls_name] = []
