@@ -128,7 +128,7 @@ class Config:
 
 		self.model_path = None
 
-"""#### Parser the data from annotation file"""
+"""#### Parse the data from annotation file"""
 
 def get_data(input_path):
 	"""Parser the data from annotation file
