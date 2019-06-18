@@ -53,23 +53,26 @@ parser.add_argument('--session_name', required=True, type=str)
 parser.add_argument('--base_path', required=True, type=str)
 parser.add_argument('--anno_path_train', required=True, type=str)
 parser.add_argument('--anno_path_val', required=True, type=str)
-parser.add_argument('--data_path', required=True, type=str)
+parser.add_argument('--data_paths', required=True, type=str)
 parser.add_argument('--pretrained_weight_path', required=True, type=str)
 parser.add_argument('--epochs', required=True, type=int)
 parser.add_argument('--val_length', required=False, default=200, type=int)
+parser.add_argument('--source_probs', required=False, default='1', type=str)
 args = parser.parse_args()
 
 base_path = args.base_path #used for output path
-anno_path_train = args.anno_path_train #annotation file path for training
-anno_path_val = args.anno_path_val #annotation file path for validation
-data_path = args.data_path #path test and train directory are stored in, data will be loaded from data_path/filepath with filepath being the image path given in the annotation files
-output_path = os.path.join(base_path, 'sessions', args.session_name) #path to save model and configs
+anno_path_train = args.anno_path_train.split(';') #annotation file path for training
+anno_path_val = args.anno_path_val.split(';') #annotation file path for validation
+data_paths = args.data_paths.split(';') #path test and train directory are stored in, data will be loaded from data_paths/filepath with filepath being the image path given in the annotation files
+output_path = os.path.join(base_path, 'sessions', args.session_name) #path to save model and
+source_probs =list(map(float, args.source_probs.split(';')))  # if data_paths contain multiple semicolon-separated paths, this specifies the probabilties of the sources being picked for sample generation
 
 print('This is a Training Session of ->{}<- with {} epochs.'.format(args.session_name, args.epochs))
 print('Base Path: {}'.format(base_path))
 print('Annotation File for Training: {}'.format(anno_path_train))
 print('Annotation File for Cross Validation: {}'.format(anno_path_val))
-print('Image Data: {}'.format(data_path))
+print('Image Data Paths: {}'.format(data_paths))
+print('Source Probs: {}'.format(source_probs))
 print('Pretrained Weight Path: {}'.format(args.pretrained_weight_path))
 print('Number of Epochs: {}'.format(args.epochs))
 print('Number of Images to Compute Cross Validation on (val_length): {}'.format(args.val_length))
@@ -136,101 +139,112 @@ class Config:
 
 """#### get_data() Definition"""
 
-def get_data(input_path):
+def get_data(anno_paths, data_paths, source_probs):
 	"""Parse the data from annotation file
 
 	Args:
-		input_path: annotation file path
+		anno_paths: paths to the anno files
+		data_paths: paths to the data
 
 	Returns:
-		all_data: list(filepath, width, height, list(bboxes))
+		all_data: dictionary containing lists of format list(filepath, width, height, list(bboxes))
 		classes_count: dict{key:class_name, value:count_num}
 			e.g. {'Car': 2383, 'Mobile phone': 1108, 'Person': 3745}
 		class_mapping: dict{key:class_name, value: idx}
 			e.g. {'Car': 0, 'Mobile phone': 1, 'Person': 2}
 	"""
+
+	assert (len(anno_paths) == len(data_paths)), "Number of annotation file paths given ({}) doesn't match number of data paths ({})".format(len(anno_paths),len(data_paths))
+	assert (len(source_probs) == len(
+		data_paths)), "Number of source probs given ({}) does not match number of sources ({})".format(
+		len(source_probs), len(data_paths))
+
+
 	found_bg = False
-	all_imgs = {}
-
 	classes_count = {}
-
 	class_mapping = {}
+	all_data = {}
 
 	visualise = True
 
 	i = 1
 
-	with open(input_path,'r') as f:
+	for source,(anno_path,data_path) in enumerate(zip(anno_paths, data_paths)):
 
-		print('Parsing annotation files')
+		all_imgs = {}
 
-		for line in f:
+		with open(anno_path,'r') as f:
 
-			# Print process
-			sys.stdout.write('\r'+'idx=' + str(i))
-			i += 1
+			print('Parsing annotation files')
 
-			line_split = line.strip().split(',')
+			for line in f:
 
-			# Make sure the info saved in annotation file matching the format (path_filename, x1, y1, x2, y2, class_name)
-			# Note:
-			#	One path_filename might has several classes (class_name)
-			#	x1, y1, x2, y2 are the pixel value of the origial image, not the ratio value
-			#	(x1, y1) top left coordinates; (x2, y2) bottom right coordinates
-			#   x1,y1-------------------
-			#	|						|
-			#	|						|
-			#	|						|
-			#	|						|
-			#	---------------------x2,y2
+				# Print process
+				sys.stdout.write('\r'+'idx=' + str(i))
+				i += 1
 
-			(file,x1,y1,x2,y2,class_name) = line_split
-			filename = os.path.join(data_path, file)
+				line_split = line.strip().split(',')
 
-			if class_name not in classes_count:
-				classes_count[class_name] = 1
-			else:
-				classes_count[class_name] += 1
+				# Make sure the info saved in annotation file matching the format (path_filename, x1, y1, x2, y2, class_name)
+				# Note:
+				#	One path_filename might has several classes (class_name)
+				#	x1, y1, x2, y2 are the pixel value of the origial image, not the ratio value
+				#	(x1, y1) top left coordinates; (x2, y2) bottom right coordinates
+				#   x1,y1-------------------
+				#	|						|
+				#	|						|
+				#	|						|
+				#	|						|
+				#	---------------------x2,y2
 
-			if class_name not in class_mapping:
-				if class_name == 'bg' and found_bg == False:
-					print('Found class name with special name bg. Will be treated as a background region (this is usually for hard negative mining).')
-					found_bg = True
-				class_mapping[class_name] = len(class_mapping)
+				(file,x1,y1,x2,y2,class_name) = line_split
+				filename = os.path.join(data_path, file)
 
-			if filename not in all_imgs:
-				all_imgs[filename] = {}
+				if class_name not in classes_count:
+					classes_count[class_name] = 1
+				else:
+					classes_count[class_name] += 1
 
-				img = cv2.imread(filename)
+				if class_name not in class_mapping:
+					if class_name == 'bg' and found_bg == False:
+						print('Found class name with special name bg. Will be treated as a background region (this is usually for hard negative mining).')
+						found_bg = True
+					class_mapping[class_name] = len(class_mapping)
 
-				(rows,cols) = img.shape[:2]
+				if filename not in all_imgs:
+					all_imgs[filename] = {}
 
+					img = cv2.imread(filename)
 
-				all_imgs[filename]['filepath'] = filename
-				all_imgs[filename]['width'] = cols
-				all_imgs[filename]['height'] = rows
-				all_imgs[filename]['bboxes'] = []
-				# if np.random.randint(0,6) > 0:
-				# 	all_imgs[filename]['imageset'] = 'trainval'
-				# else:
-				# 	all_imgs[filename]['imageset'] = 'test'
-
-			all_imgs[filename]['bboxes'].append({'class': class_name, 'x1': int(x1), 'x2': int(x2), 'y1': int(y1), 'y2': int(y2)})
+					(rows,cols) = img.shape[:2]
 
 
-		all_data = []
+					all_imgs[filename]['filepath'] = filename
+					all_imgs[filename]['width'] = cols
+					all_imgs[filename]['height'] = rows
+					all_imgs[filename]['bboxes'] = []
+					# if np.random.randint(0,6) > 0:
+					# 	all_imgs[filename]['imageset'] = 'trainval'
+					# else:
+					# 	all_imgs[filename]['imageset'] = 'test'
+
+				all_imgs[filename]['bboxes'].append({'class': class_name, 'x1': int(x1), 'x2': int(x2), 'y1': int(y1), 'y2': int(y2)})
+
+
+		# for every source fill an entry of all_data dict
+		all_data[source]=[]
 		for key in all_imgs:
-			all_data.append(all_imgs[key])
+			all_data[source].append(all_imgs[key])
 
-		# make sure the bg class is last in the list
-		if found_bg:
-			if class_mapping['bg'] != len(class_mapping) - 1:
-				key_to_switch = [key for key in class_mapping.keys() if class_mapping[key] == len(class_mapping)-1][0]
-				val_to_switch = class_mapping['bg']
-				class_mapping['bg'] = len(class_mapping) - 1
-				class_mapping[key_to_switch] = val_to_switch
+	# make sure the bg class is last in the list
+	if found_bg:
+		if class_mapping['bg'] != len(class_mapping) - 1:
+			key_to_switch = [key for key in class_mapping.keys() if class_mapping[key] == len(class_mapping)-1][0]
+			val_to_switch = class_mapping['bg']
+			class_mapping['bg'] = len(class_mapping) - 1
+			class_mapping[key_to_switch] = val_to_switch
 
-		return all_data, classes_count, class_mapping
+	return all_data, classes_count, class_mapping
 
 """#### Class RoiPoolingConv Definition 
 *Define ROI Pooling Convolutional Layer
@@ -755,14 +769,15 @@ def augment(img_data, config, augment=True):
 *Generate the ground_truth anchors
 """
 
-def get_anchor_gt(all_img_data, C, img_length_calc_function, mode='train'):
+def get_anchor_gt(all_img_data, C, img_length_calc_function,source_probs, mode='train'):
 	""" Yield the ground-truth anchors as Y (labels)
 
 	Args:
-		all_img_data: list(filepath, width, height, list(bboxes))
+		all_img_data: dictionary of lists with format list(filepath, width, height, list(bboxes))
 		C: config
 		img_length_calc_function: function to calculate final layer's feature map (of base model) size according to input image size
 		mode: 'train' or 'test'; 'train' mode need augmentation
+		source_probs: list containing probabilities of the generator to yield a sample of respective source
 
 	Returns:
 		x_img: image data after resized and scaling (smallest size = 300px)
@@ -771,59 +786,71 @@ def get_anchor_gt(all_img_data, C, img_length_calc_function, mode='train'):
 		debug_img: show image for debug
 		num_pos: show number of positive anchors for debug
 	"""
+
+	iter = np.zeros(len(all_img_data),dtype=int)
+
 	while True:
 
-		for img_data in all_img_data:
+		source = np.random.choice(np.arange(len(source_probs)),
+								  p=source_probs)  # generate index for source selection according to source probs
+
+		img_data = all_img_data[source][iter[source]]
+		print(img_data['filepath'])
+
+		iter[source] += 1
+		if iter[source] == len(all_img_data[source]):
+			iter[source] = 0
+
+		try:
+
+			# read in image, and optionally add augmentation
+
+			if mode == 'train':
+				img_data_aug, x_img = augment(img_data, C, augment=True)
+			else:
+				img_data_aug, x_img = augment(img_data, C, augment=False)
+
+			(width, height) = (img_data_aug['width'], img_data_aug['height'])
+			(rows, cols, _) = x_img.shape
+
+			assert cols == width
+			assert rows == height
+
+			# get image dimensions for resizing
+			(resized_width, resized_height) = get_new_img_size(width, height, C.im_size)
+
+			# resize the image so that smalles side is length = 300px
+			x_img = cv2.resize(x_img, (resized_width, resized_height), interpolation=cv2.INTER_CUBIC)
+			debug_img = x_img.copy()
+
 			try:
-
-				# read in image, and optionally add augmentation
-
-				if mode == 'train':
-					img_data_aug, x_img = augment(img_data, C, augment=True)
-				else:
-					img_data_aug, x_img = augment(img_data, C, augment=False)
-
-				(width, height) = (img_data_aug['width'], img_data_aug['height'])
-				(rows, cols, _) = x_img.shape
-
-				assert cols == width
-				assert rows == height
-
-				# get image dimensions for resizing
-				(resized_width, resized_height) = get_new_img_size(width, height, C.im_size)
-
-				# resize the image so that smalles side is length = 300px
-				x_img = cv2.resize(x_img, (resized_width, resized_height), interpolation=cv2.INTER_CUBIC)
-				debug_img = x_img.copy()
-
-				try:
-					y_rpn_cls, y_rpn_regr, num_pos = calc_rpn(C, img_data_aug, width, height, resized_width, resized_height, img_length_calc_function)
-				except:
-					continue
-
-				# Zero-center by mean pixel, and preprocess image
-
-				x_img = x_img[:,:, (2, 1, 0)]  # BGR -> RGB
-				x_img = x_img.astype(np.float32)
-				x_img[:, :, 0] -= C.img_channel_mean[0]
-				x_img[:, :, 1] -= C.img_channel_mean[1]
-				x_img[:, :, 2] -= C.img_channel_mean[2]
-				x_img /= C.img_scaling_factor
-
-				x_img = np.transpose(x_img, (2, 0, 1))
-				x_img = np.expand_dims(x_img, axis=0)
-
-				y_rpn_regr[:, y_rpn_regr.shape[1]//2:, :, :] *= C.std_scaling
-
-				x_img = np.transpose(x_img, (0, 2, 3, 1))
-				y_rpn_cls = np.transpose(y_rpn_cls, (0, 2, 3, 1))
-				y_rpn_regr = np.transpose(y_rpn_regr, (0, 2, 3, 1))
-
-				yield np.copy(x_img), [np.copy(y_rpn_cls), np.copy(y_rpn_regr)], img_data_aug, debug_img, num_pos
-
-			except Exception as e:
-				print(e)
+				y_rpn_cls, y_rpn_regr, num_pos = calc_rpn(C, img_data_aug, width, height, resized_width, resized_height, img_length_calc_function)
+			except:
 				continue
+
+			# Zero-center by mean pixel, and preprocess image
+
+			x_img = x_img[:,:, (2, 1, 0)]  # BGR -> RGB
+			x_img = x_img.astype(np.float32)
+			x_img[:, :, 0] -= C.img_channel_mean[0]
+			x_img[:, :, 1] -= C.img_channel_mean[1]
+			x_img[:, :, 2] -= C.img_channel_mean[2]
+			x_img /= C.img_scaling_factor
+
+			x_img = np.transpose(x_img, (2, 0, 1))
+			x_img = np.expand_dims(x_img, axis=0)
+
+			y_rpn_regr[:, y_rpn_regr.shape[1]//2:, :, :] *= C.std_scaling
+
+			x_img = np.transpose(x_img, (0, 2, 3, 1))
+			y_rpn_cls = np.transpose(y_rpn_cls, (0, 2, 3, 1))
+			y_rpn_regr = np.transpose(y_rpn_regr, (0, 2, 3, 1))
+
+			yield np.copy(x_img), [np.copy(y_rpn_cls), np.copy(y_rpn_regr)], img_data_aug, debug_img, num_pos
+
+		except Exception as e:
+			print(e)
+			continue
 
 """#### Definitions of the loss functions"""
 
@@ -1264,8 +1291,8 @@ config_output_filename = os.path.join(output_path, 'model/model_vgg_config.pickl
 if not os.path.isdir(output_path):
 	os.makedirs(os.path.join(output_path,'model'))
 
-train_imgs, classes_count, class_mapping_temp = get_data(anno_path_train)
-val_imgs, _, _ = get_data(anno_path_val)
+train_imgs, classes_count, class_mapping_temp = get_data(anno_path_train, data_paths, source_probs)
+val_imgs, _, _ = get_data(anno_path_val, data_paths,source_probs)
 
 if 'bg' not in classes_count:
 	classes_count['bg'] = 0
@@ -1320,15 +1347,19 @@ with open(config_output_filename, 'wb') as config_f:
 
 # Shuffle the images with seed
 random.seed(1)
-random.shuffle(train_imgs)
+for key in train_imgs:   # ~_imgs is a dictionary containing lists of image data of a single source each
+	random.shuffle(train_imgs[key])
+for key in val_imgs:
+	random.shuffle(val_imgs[key])
+
 
 print('Num train samples (images) {}'.format(len(train_imgs)))
 
 """#### generate data generator (get_anchor_gt())"""
 
 # Get train and validation data generator which generate X, Y, image_data
-data_gen_train = get_anchor_gt(train_imgs, C, get_img_output_length, mode='train')
-data_gen_val = get_anchor_gt(val_imgs, C, get_img_output_length, mode='train') #ADDRDFORVAL
+data_gen_train = get_anchor_gt(train_imgs, C, get_img_output_length,source_probs, mode='train')
+data_gen_val = get_anchor_gt(val_imgs, C, get_img_output_length, source_probs, mode='train') #ADDRDFORVAL
 
 # """#### Explore 'data_gen_train'
 #
